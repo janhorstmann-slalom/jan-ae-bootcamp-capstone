@@ -6,7 +6,7 @@ import type {
   ListGamesResponseDTO,
 } from '@shared/types/api';
 
-const BASE_URL = 'http://localhost:3001/api';
+const BASE_URL = '/api';
 
 export interface ApiError {
   error: string;

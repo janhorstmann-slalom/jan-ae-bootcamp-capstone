@@ -8,9 +8,12 @@ const PORT = process.env.PORT ?? 3001;
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(express.json());
 
-// ─── CORS (dev: allow frontend origin) ───────────────────────────────────────
+// ─── CORS (dev: allow any localhost origin) ──────────────────────────────────
 app.use((_req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+  const origin = _req.headers.origin ?? '';
+  if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (_req.method === 'OPTIONS') {

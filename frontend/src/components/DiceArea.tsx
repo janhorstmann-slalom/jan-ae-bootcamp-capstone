@@ -1,31 +1,40 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { RollDTO } from '@shared/types/api';
 import Die from './Die';
 
 interface Props {
   currentRoll: RollDTO | null;
-  /** dieIndices that are already kept from previous rolls in this turn */
-  previouslyKeptIndices: Set<number>;
-  onRoll: () => void;
-  onKeep: (dieIndices: number[]) => void;
+  /** Map of dieIndex → face value for dice kept in previous rolls of this turn */
+  previouslyKeptDice: Map<number, number>;
+  /** Called with selected die indices to keep (empty array = first roll, no keep needed) */
+  onRoll: (dieIndicesToKeep: number[]) => void;
   rolling: boolean;
-  keeping: boolean;
   turnCompleted: boolean;
 }
 
 export default function DiceArea({
   currentRoll,
-  previouslyKeptIndices,
+  previouslyKeptDice,
   onRoll,
-  onKeep,
   rolling,
-  keeping,
   turnCompleted,
 }: Props) {
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Holds the indices mid-flight (after click, before API resolves) so those dice
+  // remain visually selected instead of showing a spinner.
+  const [pendingKeepIndices, setPendingKeepIndices] = useState<Set<number>>(new Set());
 
+  useEffect(() => {
+    if (!rolling) setPendingKeepIndices(new Set());
+  }, [rolling]);
+
+  // Pending keep = rolled but no die kept yet. Requires ≥1 selection before rolling again.
   const hasPendingKeep =
-    currentRoll !== null && currentRoll.dice.some((d) => !d.kept);
+    currentRoll !== null &&
+    !currentRoll.dice.some((d) => d.kept);
+
+  // Show inline prompt when pending keep but nothing selected (suppress during API call)
+  const showSelectPrompt = hasPendingKeep && selected.size === 0 && !rolling;
 
   const toggleSelect = (dieIndex: number) => {
     setSelected((prev) => {
@@ -36,15 +45,11 @@ export default function DiceArea({
     });
   };
 
-  const handleKeep = () => {
-    if (selected.size === 0) return;
-    onKeep(Array.from(selected));
-    setSelected(new Set());
-  };
-
   const handleRoll = () => {
+    const indices = Array.from(selected);
+    setPendingKeepIndices(new Set(indices));
     setSelected(new Set());
-    onRoll();
+    onRoll(indices);
   };
 
   // Build the 5-die display state
@@ -54,10 +59,10 @@ export default function DiceArea({
     kept: boolean;
     autoKept: boolean;
   }> = Array.from({ length: 5 }, (_, i) => {
-    // Check if previously kept
-    if (previouslyKeptIndices.has(i)) {
-      // Find the die's value from the current roll context (won't be in currentRoll.dice)
-      return { dieIndex: i, value: 0, kept: true, autoKept: false };
+    // Dice kept in previous rolls of this turn
+    if (previouslyKeptDice.has(i)) {
+      const val = previouslyKeptDice.get(i)!;
+      return { dieIndex: i, value: val, kept: true, autoKept: val === 3 };
     }
     // Find in current roll
     const dr = currentRoll?.dice.find((d) => d.dieIndex === i);
@@ -68,9 +73,21 @@ export default function DiceArea({
   });
 
   const availableDiceCount = diceState.filter((d) => !d.kept && d.value !== 0).length;
+  const allAvailableSelected =
+    availableDiceCount > 0 && selected.size >= availableDiceCount;
+
+  // Running score: sum of already-kept + currently-selected non-3 values
+  const runningScore = diceState.reduce((sum, d) => {
+    if (d.value === 0 || d.value === 3) return sum;
+    if (d.kept || selected.has(d.dieIndex)) return sum + d.value;
+    return sum;
+  }, 0);
 
   return (
     <div className="dice-area">
+      <div className="running-score" aria-live="polite">
+        Turn score: <strong>{runningScore}</strong>
+      </div>
       <div className="dice-row" role="group" aria-label="Dice">
         {diceState.map((d) => (
           <Die
@@ -79,31 +96,25 @@ export default function DiceArea({
             value={d.value}
             kept={d.kept}
             autoKept={d.autoKept}
-            selected={selected.has(d.dieIndex)}
+            selected={selected.has(d.dieIndex) || pendingKeepIndices.has(d.dieIndex)}
+            rolling={rolling && !d.kept && !pendingKeepIndices.has(d.dieIndex)}
             onClick={toggleSelect}
           />
         ))}
       </div>
 
       <div className="dice-actions">
+        {showSelectPrompt && (
+          <p className="select-prompt" role="alert">Select at least 1 die to keep before rolling again.</p>
+        )}
         <button
           type="button"
           className="roll-btn"
           onClick={handleRoll}
-          disabled={hasPendingKeep || rolling || keeping || turnCompleted || currentRoll === null && false}
-          aria-label="Roll Dice"
+          disabled={showSelectPrompt || rolling || turnCompleted}
+          aria-label={allAvailableSelected ? 'End Turn' : 'Roll Dice'}
         >
-          {rolling ? 'Rolling…' : 'Roll Dice'}
-        </button>
-
-        <button
-          type="button"
-          className="keep-btn"
-          onClick={handleKeep}
-          disabled={selected.size === 0 || keeping || rolling || availableDiceCount === 0}
-          aria-label="Keep Selected"
-        >
-          {keeping ? 'Keeping…' : 'Keep Selected'}
+          {rolling ? 'Rolling…' : allAvailableSelected ? 'End Turn' : 'Roll Dice'}
         </button>
       </div>
     </div>

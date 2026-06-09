@@ -33,7 +33,7 @@ describe('History page', () => {
         <History />
       </MemoryRouter>,
     );
-    await screen.findByText(/no completed games/i);
+    await screen.findByText(/no games yet/i);
   });
 
   it('renders a list item for each game with player names and winner', async () => {

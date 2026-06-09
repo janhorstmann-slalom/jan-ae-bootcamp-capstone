@@ -29,27 +29,31 @@ export default function History() {
         {error && <p className="api-error" role="alert">{error}</p>}
 
         {!loading && !error && games.length === 0 && (
-          <p className="empty-state">No completed games yet. Start playing!</p>
+          <p className="empty-state">No games yet. Start playing!</p>
         )}
 
         {!loading && games.length > 0 && (
-          <ul className="game-list" aria-label="Completed games">
+          <ul className="game-list" aria-label="Games">
             {games.map((g) => {
-              const winnerNames = g.players
-                .filter((p) => g.winnerPlayerIds?.includes(p.id))
-                .map((p) => p.name)
-                .join(', ');
+              const isCompleted = g.status === 'COMPLETED';
+              const winnerNames = isCompleted
+                ? g.players
+                    .filter((p) => g.winnerPlayerIds?.includes(p.id))
+                    .map((p) => p.name)
+                    .join(', ')
+                : null;
               const playerNames = g.players.map((p) => p.name).join(', ');
-              const date = g.completedAt
-                ? new Date(g.completedAt).toLocaleDateString()
-                : 'Unknown';
+              const date = new Date(g.createdAt).toLocaleDateString();
 
               return (
                 <li key={g.id} className="game-list__item">
-                  <Link to={`/history/${g.id}`} className="game-list__link">
+                  <Link to={isCompleted ? `/history/${g.id}` : '#'} className="game-list__link">
                     <span className="game-list__date">{date}</span>
                     <span className="game-list__players">{playerNames}</span>
-                    <span className="game-list__winner">Winner: {winnerNames}</span>
+                    {isCompleted
+                      ? <span className="game-list__winner">Winner: {winnerNames}</span>
+                      : <span className="game-list__status">In Progress</span>
+                    }
                   </Link>
                 </li>
               );

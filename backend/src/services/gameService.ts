@@ -174,33 +174,16 @@ async function advanceTurnOrRound(
   const playerCount = game.players.length;
 
   if (currentTurn.turnOrder === playerCount - 1) {
-    // Last turn in the round — complete the round
+    // Last turn in the round — complete the round and auto-complete the game.
+    // A game lasts exactly one full round (every player takes one turn).
     await tx.round.update({
       where: { id: currentRound.id },
       data: { completedAt: new Date() },
     });
 
-    // Compute the next round's first player using rotation rule
-    const prevFirstPlayer = game.players.find((p) => p.id === currentRound.firstPlayerId)!;
-    const nextFirstPos = (prevFirstPlayer.originalPosition + 1) % playerCount;
-    const nextFirstPlayer = game.players.find((p) => p.originalPosition === nextFirstPos)!;
-
-    // Create the next round
-    const nextRound = await tx.round.create({
-      data: {
-        gameId: game.id,
-        roundNumber: currentRound.roundNumber + 1,
-        firstPlayerId: nextFirstPlayer.id,
-      },
-    });
-
-    // Create the first turn of the next round
-    await tx.turn.create({
-      data: {
-        roundId: nextRound.id,
-        playerId: nextFirstPlayer.id,
-        turnOrder: 0,
-      },
+    await tx.game.update({
+      where: { id: game.id },
+      data: { status: 'COMPLETED', completedAt: new Date() },
     });
   } else {
     // More players remain in this round — create their turn
@@ -310,9 +293,13 @@ export async function rollDice(gameId: string): Promise<RollResponseDTO> {
     throw new AppError(409, 'GAME_COMPLETED', 'All turns in current round are complete.');
   }
 
-  // Check for pending-keep: latest roll has un-kept dice
+  // Check for pending-keep: latest roll exists and no die has been kept from it yet.
+  // Any kept die (including 3s) satisfies the requirement.
   const latestRoll = currentTurn.rolls[currentTurn.rolls.length - 1] ?? null;
-  if (latestRoll && latestRoll.dieResults.some((dr) => !dr.kept)) {
+  if (
+    latestRoll &&
+    !latestRoll.dieResults.some((dr) => dr.kept)
+  ) {
     throw new AppError(
       409,
       'PENDING_KEEP',
@@ -339,7 +326,7 @@ export async function rollDice(gameId: string): Promise<RollResponseDTO> {
           rollId: newRoll.id,
           dieIndex: diceToRoll[i],
           value: values[i],
-          kept: values[i] === 3, // auto-keep 3s
+          kept: false, // player must manually keep all dice, including 3s
         },
       });
       dieResultRows.push(dr);
@@ -528,10 +515,9 @@ export async function listGames(
   const skip = (page - 1) * limit;
 
   const [total, games] = await Promise.all([
-    prisma.game.count({ where: { status: 'COMPLETED' } }),
+    prisma.game.count(),
     prisma.game.findMany({
-      where: { status: 'COMPLETED' },
-      orderBy: { completedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
       skip,
       take: limit,
       include: {

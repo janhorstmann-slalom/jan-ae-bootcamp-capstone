@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
-import { getGame } from '../services/api';
+import { getGame, createGame } from '../services/api';
 import Scoreboard from '../components/Scoreboard';
 
 export default function GameResult() {
@@ -25,11 +25,29 @@ export default function GameResult() {
     return null;
   }
 
+  const [rematching, setRematching] = useState(false);
+
   const winners = game.players.filter((p) => game.winnerPlayerIds?.includes(p.id));
 
   const handleNewGame = () => {
     clearGame();
     navigate('/');
+  };
+
+  const handleRematch = async () => {
+    setRematching(true);
+    try {
+      // Same players, same order
+      const playerNames = game.players
+        .slice()
+        .sort((a, b) => (a.originalPosition ?? 0) - (b.originalPosition ?? 0))
+        .map((p) => p.name);
+      const newGame = await createGame(playerNames);
+      setGame(newGame);
+      navigate(`/game/${newGame.id}`);
+    } catch {
+      setRematching(false);
+    }
   };
 
   return (
@@ -87,6 +105,9 @@ export default function GameResult() {
         </section>
 
         <div className="result-actions">
+          <button type="button" className="rematch-btn" onClick={handleRematch} disabled={rematching}>
+            {rematching ? 'Starting…' : '🔁 Rematch'}
+          </button>
           <button type="button" className="new-game-btn" onClick={handleNewGame}>
             New Game
           </button>

@@ -38,16 +38,22 @@ body {
 .dice-row { display: flex; gap: 0.75rem; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
 .die { width: 64px; height: 64px; border-radius: 8px; border: 2px solid #ccc; background: #fff; font-size: 2rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform 0.1s, border-color 0.1s; }
 .die:hover:not(:disabled) { transform: scale(1.05); }
+@keyframes die-spin { to { transform: rotate(360deg); } }
+.die--rolling { border-color: #6c63ff; background: #f0eeff; cursor: default; }
+.die-spinner { display: block; width: 24px; height: 24px; border: 3px solid #c9c3ff; border-top-color: #6c63ff; border-radius: 50%; animation: die-spin 0.6s linear infinite; }
 .die--available { border-color: #6c63ff; }
 .die--selected { border-color: #ff6b6b; background: #fff0f0; transform: translateY(-4px); }
 .die--kept { border-color: #aaa; background: #f0f0f0; color: #888; cursor: default; }
-.die--auto-kept { border-color: #f9a825; background: #fff8e1; cursor: default; }
+.die--kept-three { border-color: #f9a825; background: #fff8e1; }
+.die--three { border-color: #f9a825; background: #fff8e1; }
+.die--three-selected { background: #ffe082; transform: translateY(-4px); box-shadow: 0 4px 10px rgba(249,168,37,.5); }
 .die-value { font-size: 0.7rem; color: #555; }
-.dice-actions { display: flex; gap: 1rem; justify-content: center; }
+.running-score { text-align: center; font-size: 1rem; color: #555; margin-bottom: 0.75rem; }
+.dice-actions { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+.select-prompt { font-size: 0.875rem; color: #d00; margin: 0; }
 .roll-btn, .keep-btn { padding: 0.6rem 1.5rem; border-radius: 6px; font-size: 1rem; cursor: pointer; border: none; }
 .roll-btn { background: #6c63ff; color: #fff; }
-.keep-btn { background: #ff6b6b; color: #fff; }
-.roll-btn:disabled, .keep-btn:disabled { opacity: 0.5; cursor: default; }
+.roll-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* ─── Scoreboard ───────────────────────────────────────────────────────────── */
 .scoreboard { width: 100%; border-collapse: collapse; margin: 1rem 0; }
@@ -59,7 +65,10 @@ body {
 
 /* ─── Game Page ────────────────────────────────────────────────────────────── */
 .game-main { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+.active-player { display: flex; align-items: center; justify-content: space-between; }
 .active-player h2 { font-size: 1.5rem; color: #333; }
+.restart-btn { padding: 0.5rem 1rem; background: #fff; color: #888; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; cursor: pointer; transition: border-color 0.1s, color 0.1s; }
+.restart-btn:hover { border-color: #d00; color: #d00; }
 .round-indicator { font-size: 0.9rem; color: #666; }
 .round-banner, .turn-score-banner { background: #6c63ff; color: #fff; padding: 0.75rem 1rem; border-radius: 6px; text-align: center; font-weight: 600; }
 .turn-score-banner { background: #ff6b6b; }
@@ -73,6 +82,8 @@ body {
 .round-table th, .round-table td, .score-detail-table th, .score-detail-table td { padding: 0.5rem; border: 1px solid #eee; text-align: center; }
 .round-table th, .score-detail-table th { background: #f0eeff; }
 .result-actions { display: flex; gap: 1rem; margin-top: 1.5rem; align-items: center; }
+.rematch-btn { padding: 0.6rem 1.2rem; background: #ff6b6b; color: #fff; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: 600; }
+.rematch-btn:disabled { opacity: 0.6; cursor: default; }
 .new-game-btn { padding: 0.6rem 1.2rem; background: #6c63ff; color: #fff; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; }
 .history-link { color: #6c63ff; text-decoration: none; font-weight: 600; }
 
@@ -84,7 +95,19 @@ body {
 .game-list__date { color: #888; font-size: 0.9rem; min-width: 100px; }
 .game-list__players { flex: 1; }
 .game-list__winner { color: #6c63ff; font-weight: 600; }
+.game-list__status { color: #f9a825; font-weight: 600; }
 .empty-state { color: #888; font-size: 1rem; text-align: center; margin-top: 2rem; }
+
+/* ─── Match Log ────────────────────────────────────────────────────────────── */
+.match-log { background: #fff; border-radius: 8px; padding: 1rem 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.match-log__title { font-size: 1rem; font-weight: 700; color: #6c63ff; margin-bottom: 0.75rem; }
+.match-log__list { list-style: none; display: flex; flex-direction: column; gap: 0.4rem; }
+.match-log__entry { display: flex; gap: 0.75rem; align-items: center; font-size: 0.875rem; padding: 0.4rem 0.5rem; border-radius: 4px; }
+.match-log__entry--current { background: #f0eeff; }
+.match-log__date { color: #999; min-width: 5rem; }
+.match-log__players { flex: 1; color: #333; }
+.match-log__winner { color: #6c63ff; font-weight: 600; white-space: nowrap; }
+.match-log__status { color: #f9a825; font-weight: 600; white-space: nowrap; }
 
 /* ─── Utilities ────────────────────────────────────────────────────────────── */
 .api-error { color: #d00; padding: 0.5rem; background: #fff0f0; border-radius: 4px; margin-bottom: 0.5rem; }

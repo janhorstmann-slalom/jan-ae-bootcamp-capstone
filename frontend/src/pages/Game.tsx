@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
-import { getGame, rollDice, keepDice, endGame } from '../services/api';
+import { getGame, rollDice, keepDice, listGames } from '../services/api';
 import DiceArea from '../components/DiceArea';
 import Scoreboard from '../components/Scoreboard';
-import type { RollDTO, TurnDTO } from '@shared/types/api';
+import type { RollDTO, TurnDTO, GameSummaryDTO } from '@shared/types/api';
 import type { ApiError } from '../services/api';
 
 export default function Game() {
@@ -13,13 +13,19 @@ export default function Game() {
   const { game, setGame } = useGameStore();
 
   const [rolling, setRolling] = useState(false);
-  const [keeping, setKeeping] = useState(false);
-  const [ending, setEnding] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [roundBanner, setRoundBanner] = useState<string | null>(null);
   const [turnScoreBanner, setTurnScoreBanner] = useState<number | null>(null);
+  const [matchLog, setMatchLog] = useState<GameSummaryDTO[]>([]);
 
-  // T052: Rehydrate on browser refresh
+  const refreshMatchLog = useCallback(() => {
+    listGames(1, 10).then((data) => setMatchLog(data.games)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshMatchLog();
+  }, [refreshMatchLog]);
+
+  // Rehydrate on browser refresh
   useEffect(() => {
     if (!gameId) return;
     if (!game || game.id !== gameId) {
@@ -27,76 +33,52 @@ export default function Game() {
     }
   }, [gameId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleRoll = useCallback(async () => {
-    if (!gameId) return;
-    setApiError(null);
-    setTurnScoreBanner(null);
-    setRolling(true);
-    try {
-      const result = await rollDice(gameId);
-      setGame(result.game);
-      if (result.turnCompleted) {
-        const score = result.game.rounds
-          .flatMap((r) => r.turns)
-          .find((t) => t.completedAt !== null && t.score !== null && t.playerId === game?.currentTurnPlayerId)?.score ?? null;
-        setTurnScoreBanner(score);
-      }
-    } catch (err) {
-      setApiError((err as ApiError).message);
-    } finally {
-      setRolling(false);
-    }
-  }, [gameId, game, setGame]);
-
-  const handleKeep = useCallback(
-    async (dieIndices: number[]) => {
+  const handleRoll = useCallback(
+    async (dieIndicesToKeep: number[]) => {
       if (!gameId) return;
       setApiError(null);
-      setKeeping(true);
+      setTurnScoreBanner(null);
+      setRolling(true);
       try {
-        const result = await keepDice(gameId, dieIndices);
-        setGame(result.game);
-
-        if (result.turnCompleted) {
-          setTurnScoreBanner(result.turnScore);
-
-          // Check if a new round started
-          const prevRound = game?.currentRoundNumber ?? 1;
-          const newRound = result.game.currentRoundNumber;
-          if (newRound !== null && newRound > prevRound) {
-            setRoundBanner(`Round ${prevRound} complete — Round ${newRound} starting!`);
-            setTimeout(() => setRoundBanner(null), 3000);
+        // If there are dice to keep first, keep them; if that completes the turn, stop.
+        if (dieIndicesToKeep.length > 0) {
+          const keepResult = await keepDice(gameId, dieIndicesToKeep);
+          setGame(keepResult.game);
+          if (keepResult.turnCompleted) {
+            setTurnScoreBanner(keepResult.turnScore);
+            return;
           }
+        }
+        // Roll the remaining dice
+        const rollResult = await rollDice(gameId);
+        setGame(rollResult.game);
+        if (rollResult.turnCompleted) {
+          const score =
+            rollResult.game.rounds
+              .flatMap((r) => r.turns)
+              .find(
+                (t) =>
+                  t.completedAt !== null &&
+                  t.score !== null &&
+                  t.playerId === game?.currentTurnPlayerId,
+              )?.score ?? null;
+          setTurnScoreBanner(score);
         }
       } catch (err) {
         setApiError((err as ApiError).message);
       } finally {
-        setKeeping(false);
+        setRolling(false);
       }
     },
     [gameId, game, setGame],
   );
 
-  const handleEndGame = useCallback(async () => {
-    if (!gameId) return;
-    setApiError(null);
-    setEnding(true);
-    try {
-      const result = await endGame(gameId);
-      setGame(result.game);
-      navigate(`/game/${gameId}/result`);
-    } catch (err) {
-      setApiError((err as ApiError).message);
-    } finally {
-      setEnding(false);
-    }
-  }, [gameId, navigate, setGame]);
-
   if (!game) {
     return <div className="page loading-page"><p>Loading game…</p></div>;
   }
 
-  if (game.status === 'COMPLETED') {
+  if (game.status === "COMPLETED") {
+    refreshMatchLog();
     navigate(`/game/${game.id}/result`);
     return null;
   }
@@ -111,24 +93,19 @@ export default function Game() {
       ? currentTurn.rolls[currentTurn.rolls.length - 1]
       : null;
 
-  // Which dieIndices are kept from previous rolls in this turn
-  const previouslyKeptIndices = new Set<number>();
+  const previouslyKeptDice = new Map<number, number>();
   if (currentTurn) {
     for (const roll of currentTurn.rolls) {
       for (const dr of roll.dice) {
-        if (dr.kept) previouslyKeptIndices.add(dr.dieIndex);
+        if (dr.kept) previouslyKeptDice.set(dr.dieIndex, dr.value);
       }
     }
-    // Remove indices in the current roll (those aren't "previously" kept)
     if (currentRoll) {
       for (const dr of currentRoll.dice) {
-        if (!dr.kept) previouslyKeptIndices.delete(dr.dieIndex);
+        if (!dr.kept) previouslyKeptDice.delete(dr.dieIndex);
       }
     }
   }
-
-  const isRoundComplete =
-    game.currentTurnPlayerId === null && game.status === 'IN_PROGRESS';
 
   return (
     <div className="page game-page">
@@ -139,18 +116,19 @@ export default function Game() {
 
       <main className="game-main">
         <section className="active-player">
-          <h2>{currentPlayer ? `${currentPlayer.name}'s Turn` : 'Waiting…'}</h2>
+          <h2>{currentPlayer ? `${currentPlayer.name}'s Turn` : "Waiting…"}</h2>
+          <button
+            type="button"
+            className="restart-btn"
+            onClick={() => navigate("/")}
+          >
+            Restart Game
+          </button>
         </section>
-
-        {roundBanner && (
-          <div className="round-banner" role="status" aria-live="polite">
-            {roundBanner}
-          </div>
-        )}
 
         {turnScoreBanner !== null && (
           <div className="turn-score-banner" role="status" aria-live="polite">
-            Turn score: {turnScoreBanner}
+            Turn score: <strong>{turnScoreBanner}</strong>
           </div>
         )}
 
@@ -163,11 +141,9 @@ export default function Game() {
         {currentTurn && (
           <DiceArea
             currentRoll={currentRoll}
-            previouslyKeptIndices={previouslyKeptIndices}
+            previouslyKeptDice={previouslyKeptDice}
             onRoll={handleRoll}
-            onKeep={handleKeep}
             rolling={rolling}
-            keeping={keeping}
             turnCompleted={currentTurn.completedAt !== null}
           />
         )}
@@ -179,17 +155,40 @@ export default function Game() {
           />
         </aside>
 
-        {isRoundComplete && (
-          <div className="end-game-area">
-            <button
-              type="button"
-              className="end-game-btn"
-              onClick={handleEndGame}
-              disabled={ending}
-            >
-              {ending ? 'Ending…' : 'End Game'}
-            </button>
-          </div>
+        {matchLog.length > 0 && (
+          <section className="match-log">
+            <h3 className="match-log__title">Match Log</h3>
+            <ul className="match-log__list">
+              {matchLog.map((g) => {
+                const isCompleted = g.status === "COMPLETED";
+                const playerNames = g.players.map((p) => p.name).join(" vs ");
+                const winnerNames = isCompleted
+                  ? g.players
+                      .filter((p) => g.winnerPlayerIds?.includes(p.id))
+                      .map((p) => p.name)
+                      .join(", ")
+                  : null;
+                const date = new Date(g.createdAt).toLocaleDateString();
+                const isCurrent = g.id === gameId;
+                return (
+                  <li
+                    key={g.id}
+                    className={`match-log__entry${isCurrent ? " match-log__entry--current" : ""}`}
+                  >
+                    <span className="match-log__date">{date}</span>
+                    <span className="match-log__players">{playerNames}</span>
+                    {isCompleted ? (
+                      <span className="match-log__winner">🏆 {winnerNames}</span>
+                    ) : (
+                      <span className="match-log__status">
+                        {isCurrent ? "Now playing" : "Abandoned"}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         )}
       </main>
     </div>
