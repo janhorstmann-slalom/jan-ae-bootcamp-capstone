@@ -1,0 +1,10 @@
+{
+  "name": "shared",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/types/api.ts",
+  "types": "./src/types/api.ts",
+  "exports": {
+    "./types/api": "./src/types/api.ts"
+  }
+}

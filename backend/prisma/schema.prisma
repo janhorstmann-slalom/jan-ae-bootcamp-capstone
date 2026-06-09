@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Game {
+  id          String    @id @default(cuid())
+  status      String    @default("IN_PROGRESS")
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  players Player[]
+  rounds  Round[]
+
+  @@index([status])
+}
+
+model Player {
+  id               String @id @default(cuid())
+  gameId           String
+  game             Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  name             String
+  originalPosition Int
+
+  turns         Turn[]
+  roundsAsFirst Round[]
+
+  @@unique([gameId, name])
+  @@index([gameId, name])
+}
+
+model Round {
+  id            String    @id @default(cuid())
+  gameId        String
+  game          Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  roundNumber   Int
+  firstPlayerId String
+  firstPlayer   Player    @relation(fields: [firstPlayerId], references: [id])
+  completedAt   DateTime?
+
+  turns Turn[]
+
+  @@unique([gameId, roundNumber])
+  @@index([gameId, roundNumber])
+}
+
+model Turn {
+  id          String    @id @default(cuid())
+  roundId     String
+  round       Round     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  playerId    String
+  player      Player    @relation(fields: [playerId], references: [id])
+  turnOrder   Int
+  score       Int?
+  completedAt DateTime?
+
+  rolls Roll[]
+
+  @@unique([roundId, playerId])
+  @@index([roundId, turnOrder])
+  @@index([roundId, playerId])
+}
+
+model Roll {
+  id         String @id @default(cuid())
+  turnId     String
+  turn       Turn   @relation(fields: [turnId], references: [id], onDelete: Cascade)
+  rollNumber Int
+
+  dieResults DieResult[]
+
+  @@unique([turnId, rollNumber])
+}
+
+model DieResult {
+  id       String  @id @default(cuid())
+  rollId   String
+  roll     Roll    @relation(fields: [rollId], references: [id], onDelete: Cascade)
+  dieIndex Int
+  value    Int
+  kept     Boolean @default(false)
+
+  @@unique([rollId, dieIndex])
+  @@index([rollId, dieIndex])
+}
