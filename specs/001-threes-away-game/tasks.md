@@ -20,12 +20,12 @@
 
 **Purpose**: Initialize npm workspace, scaffold both packages, and configure tooling. No user story can begin until this phase is complete.
 
-- [ ] T001 Initialize npm workspace with `backend/` and `frontend/` packages — `package.json` (root), `backend/package.json`, `frontend/package.json`
-- [ ] T002 Bootstrap Express + TypeScript backend: install `express`, `typescript`, `tsx`, `@types/express`, `prisma`, `@prisma/client` — `backend/package.json`, `backend/tsconfig.json`
-- [ ] T003 Bootstrap Vite + React + TypeScript frontend: run `npm create vite@latest frontend -- --template react-ts`; install `react-router-dom`, `zustand` — `frontend/package.json`, `frontend/tsconfig.json`, `frontend/vite.config.ts`
+- [ ] T001 Initialize npm workspace with `backend/`, `frontend/`, and `shared/` packages; install `concurrently` at the root — `package.json` (root), `backend/package.json`, `frontend/package.json`, `shared/package.json`
+- [ ] T002 Bootstrap Express + TypeScript backend: install `express@^5`, `typescript`, `tsx`, `@types/express@^5`, `prisma`, `@prisma/client`; add `shared` as a workspace dependency — `backend/package.json`, `backend/tsconfig.json`
+- [ ] T003 Bootstrap Vite + React + TypeScript frontend: run `npm create vite@latest frontend -- --template react-ts`; install `react-router-dom`, `zustand`; add `shared` as a workspace dependency — `frontend/package.json`, `frontend/tsconfig.json`, `frontend/vite.config.ts`
 - [ ] T004 [P] Configure Vitest in backend with `supertest` and `@types/supertest` — `backend/vitest.config.ts`
 - [ ] T005 [P] Configure Vitest and React Testing Library in frontend — `frontend/vitest.config.ts`, `frontend/src/setupTests.ts`
-- [ ] T006 [P] Add root-level `npm run dev` workspace script to start both `backend` and `frontend` concurrently — `package.json`
+- [ ] T006 [P] Add root-level `npm run dev` workspace script using `concurrently` to start both `backend` and `frontend` in parallel — `package.json`
 
 **Checkpoint**: `npm run dev` from repo root starts both servers without errors.
 
@@ -40,13 +40,15 @@
 - [ ] T007 Define Prisma schema with all six entities: `Game`, `Player`, `Round`, `Turn`, `Roll`, `DieResult` — `backend/prisma/schema.prisma`
 - [ ] T008 Run initial Prisma migration to create SQLite database and generate client types — `backend/prisma/migrations/`, `backend/prisma/dev.db`
 - [ ] T009 Create Express app entry point with JSON body parsing and global error-handling middleware — `backend/src/index.ts`, `backend/src/middleware/errorHandler.ts`
-- [ ] T010 [P] Create shared TypeScript DTO types matching REST API contract shapes (`GameDTO`, `PlayerDTO`, `RoundDTO`, `TurnDTO`, `RollDTO`, `DieResultDTO`, `GameSummaryDTO`) — `backend/src/types/api.ts`
-- [ ] T011 [P] Register `backend/src/types/` as a path alias in `tsconfig.json` so the frontend can import shared types — `backend/tsconfig.json`, `frontend/tsconfig.json`
+- [ ] T010 [P] Create `shared` package: export all DTO types matching REST API contract shapes (`GameDTO`, `PlayerDTO`, `RoundDTO`, `TurnDTO`, `RollDTO`, `DieResultDTO`, `GameSummaryDTO`) — `shared/src/types/api.ts`, `shared/package.json` (with `exports` field pointing to compiled output)
+- [ ] T011 [P] Configure `shared` package imports: add `paths` alias `@shared/*` in `backend/tsconfig.json`; add matching `resolve.alias` in `frontend/vite.config.ts` so both packages can `import type { GameDTO } from '@shared/types/api'` — `backend/tsconfig.json`, `frontend/vite.config.ts`
 - [ ] T012 Setup React Router v6 with top-level routes for Home, Game, History, and GameDetail pages (page components as stubs) — `frontend/src/main.tsx`, `frontend/src/App.tsx`
 - [ ] T013 [P] Create Zustand game store with initial state shape: `game`, `setGame`, `clearGame` actions — `frontend/src/store/gameStore.ts`
 - [ ] T014 [P] Create API client module with a typed base `apiFetch` wrapper (handles JSON, propagates error codes) — `frontend/src/services/api.ts`
+- [ ] T014a [P] Implement `GET /api/games/:id` route handler — returns full `GameDTO` with computed `cumulativeScore` on each player; needed by the Phase 3 checkpoint and game-state rehydration — `backend/src/routes/games.ts`
+- [ ] T014b [P] Add `getGame(gameId)` helper to API client — used by Phase 3 checkpoint verification, Phase 4 rehydration (T052), and Phase 5 Scoreboard — `frontend/src/services/api.ts`
 
-**Checkpoint**: Backend starts, connects to SQLite, and returns `404` for unknown routes. Frontend renders stub pages at each route without errors.
+**Checkpoint**: Backend starts, connects to SQLite, and returns `404` for unknown routes. `GET /api/games/:id` returns a valid `GameDTO`. Frontend renders stub pages at each route without errors.
 
 ---
 
@@ -64,7 +66,7 @@
 ### Implementation for User Story 1
 
 - [ ] T017 [P] [US1] Implement `gameService.createGame(playerNames)` — validates 2–8 unique non-empty names, persists `Game`, `Player` records, creates Round 1 and the first `Turn` — `backend/src/services/gameService.ts`
-- [ ] T018 [P] [US1] Implement `POST /api/games` route handler: call `gameService.createGame()`, return `201` with full `GameDTO` or structured error codes (`INVALID_PLAYER_COUNT`, `DUPLICATE_PLAYER_NAME`, `EMPTY_PLAYER_NAME`) — `backend/src/routes/games.ts`
+- [ ] T018 [US1] Implement `POST /api/games` route handler: call `gameService.createGame()`, return `201` with full `GameDTO` or structured error codes (`INVALID_PLAYER_COUNT`, `DUPLICATE_PLAYER_NAME`, `EMPTY_PLAYER_NAME`) — `backend/src/routes/games.ts`
 - [ ] T019 [US1] Register games router on Express app — `backend/src/index.ts`
 - [ ] T020 [US1] Build `NewGameForm` component: controlled inputs for player names (add/remove rows, min 2, max 8), inline validation errors, submit button — `frontend/src/components/NewGameForm.tsx`
 - [ ] T021 [US1] Build `Home` page: renders `NewGameForm`, calls `POST /api/games` via `api.ts`, stores result in Zustand, navigates to `/game/:id` on success — `frontend/src/pages/Home.tsx`
@@ -116,10 +118,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T038 [P] [US3] Implement `GET /api/games/:id` route handler — returns full `GameDTO` with computed `cumulativeScore` on each player (sum of their completed `Turn.score` values) — `backend/src/routes/games.ts`
-- [ ] T039 [P] [US3] Add `getGame(gameId)` helper to API client — `frontend/src/services/api.ts`
 - [ ] T040 [US3] Build `Scoreboard` component: renders player name and cumulative score for each player; highlights the current active player — `frontend/src/components/Scoreboard.tsx`
-- [ ] T041 [US3] Integrate `Scoreboard` into `Game` page: update Zustand store (and thus Scoreboard) after every `keepDice` response that returns `turnCompleted: true` — `frontend/src/pages/Game.tsx`
+- [ ] T041 [US3] Integrate `Scoreboard` into `Game` page: update Zustand store (and thus Scoreboard) after every `keepDice` response that returns `turnCompleted: true`; `GET /api/games/:id` and `getGame()` already available from T014a/T014b — `frontend/src/pages/Game.tsx`
+
+> **Note**: `GET /api/games/:id` (T014a) and `getGame()` helper (T014b) were implemented in Phase 2 (Foundational) to satisfy the Phase 3 checkpoint.
 
 **Checkpoint**: Scoreboard is visible on the Game page, shows all players at 0 at game start, and updates immediately after each turn completes.
 
@@ -205,7 +207,7 @@
 | US1 — Create Game | Foundational | Phase 2 complete |
 | US2 — Roll & Keep | US1 (game must exist) | US1 complete |
 | US3 — Scoreboard | US2 (turn scores needed) | US2 complete |
-| US4 — Multi-round | US2 (turns drive round detection) | US2 complete |
+| US4 — Multi-round | US2 + US3 (T052 uses `getGame` from T014b) | US3 complete |
 | US5 — History | US4 (games need to be ended) | US4 complete |
 
 ### Within Each User Story
@@ -224,10 +226,12 @@ T005  Configure Vitest in frontend
 T006  Add root dev script
 
 # Phase 2 — after T007+T008, run together:
-T010  Create DTO types
-T011  Configure type path alias
+T010  Create shared package + DTO types
+T011  Configure @shared alias (tsconfig + vite)
 T013  Create Zustand store skeleton
 T014  Create API client module
+T014a GET /api/games/:id route
+T014b getGame() API helper
 
 # Phase 3 (US1) — write tests together:
 T015  gameService.createGame() unit tests
@@ -244,10 +248,10 @@ T028  scoreService.computeTurnScore()
 T033  Die component
 T034  DiceArea component
 
-# Phase 5 (US3) — run together after T037 test:
-T038  GET /api/games/:id route
-T039  getGame() API helper
+# Phase 5 (US3) — run together (GET route + getGame already done in Phase 2):
+T037  Scoreboard component unit tests
 T040  Scoreboard component
+T041  Integrate Scoreboard into Game page
 
 # Phase 6 (US4) — write tests together:
 T042  Round rotation unit tests

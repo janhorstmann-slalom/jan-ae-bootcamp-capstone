@@ -87,10 +87,15 @@ frontend/
     ├── components/      # React Testing Library component tests
     └── pages/           # Page-level integration tests
 
-package.json             # Workspace root — npm workspaces for backend + frontend
+shared/
+└── src/
+    └── types/
+        └── api.ts       # Shared DTO types imported by both backend and frontend via @shared alias
+
+package.json             # Workspace root — npm workspaces for backend + frontend + shared
 ```
 
-**Structure Decision**: Web application layout (Option 2) — separate `backend/` and `frontend/` workspace packages under a single npm workspace root. Shared TypeScript types are co-located in `backend/src/types/` and imported by the frontend via workspace reference, avoiding duplication of API shapes.
+**Structure Decision**: Web application layout (Option 2) — separate `backend/`, `frontend/`, and `shared/` workspace packages under a single npm workspace root. The `shared` package owns all DTO type definitions; both the backend and frontend import from `@shared/types/api` via a workspace reference and tsconfig/Vite path alias, eliminating duplication of API response shapes.
 
 ---
 
